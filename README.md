@@ -1,92 +1,136 @@
-# Rubik's Cube RL
+# Rubik’s Cube Reinforcement Learning
 
-Навчальний проєкт із reinforcement learning: від випадкового агента й
-табличного Q-learning до DQN, curriculum learning та neural-guided search.
+A Python project for studying reinforcement learning and heuristic search on a
+3×3 Rubik’s Cube. It combines a geometry-based simulator, tabular Q-learning,
+Deep Q-Networks (DQN), and value-guided weighted A* search.
 
-## Що реалізовано
+The project provides a common environment for comparing policies under controlled
+scramble depths and action budgets. It is an experimental learning framework,
+rather than a general-purpose optimal cube solver.
 
-- фізично коректний 3×3 кубик на основі 3D-геометрії стікерів;
-- 12 quarter-turn дій і вивід кубика хрестом;
-- RL-середовище з `reset()`/`step()`, sparse reward і one-hot observation;
-- random baseline та спільні метрики;
-- табличний Q-learning;
-- PyTorch DQN із replay buffer, target network і curriculum;
-- checkpoints, CSV-метрики та графіки;
-- value network і weighted A* для складніших станів;
-- детерміновані тести симулятора, RL та neural-компонентів.
+## Implemented Methods
 
-Детальне пояснення понять і рекомендований порядок роботи є у
-[`LEARNING_GUIDE.md`](LEARNING_GUIDE.md).
+- Geometry-derived sticker permutations and 12 quarter-turn actions.
+- An environment with `reset()` and `step()`, terminal rewards, step penalties,
+  timeout penalties, and configurable episode limits.
+- Discrete states for tabular methods and 324-component one-hot observations
+  for neural models.
+- A random-policy baseline and shared evaluation metrics.
+- Tabular Q-learning with epsilon-greedy exploration.
+- DQN with experience replay, a target network, Huber loss, gradient clipping,
+  and a curriculum over increasing scramble depths.
+- Value estimation through scramble-length supervision and Bellman refinement.
+- Weighted A* with duplicate-state handling, inverse-action pruning, batched
+  heuristic evaluation, and state and elapsed-time limits.
+- Model checkpoints, CSV training metrics, and training plots.
 
-## Оточення
+Conceptual explanations and a suggested study sequence are available in
+[LEARNING_GUIDE.md](LEARNING_GUIDE.md), currently written in Ukrainian.
 
-Проєкт налаштовано на Python 3.12.10 та CUDA-збірку PyTorch для RTX 4070.
+## Environment and Installation
 
-Активуй уже створене оточення:
+The development environment uses Python 3.12. The pinned dependencies in
+`requirements.txt` target a CUDA 13.0 build of PyTorch; they are not a universal
+CPU-only installation specification. Neural components select CUDA when available
+and otherwise use the CPU.
 
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
+From the repository root, using Windows PowerShell:
 
-Якщо PowerShell забороняє activation script, запускай Python напряму:
-
-```powershell
-.\.venv\Scripts\python.exe main.py
-```
-
-Відтворення оточення з нуля:
-
-```powershell
-& "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe" -m venv .venv
+~~~powershell
+py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-```
+~~~
 
-Перевірка GPU:
+If activation is unavailable, invoke the environment interpreter directly:
 
-```powershell
-python -c "import torch; print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0))"
-```
+~~~powershell
+.\.venv\Scripts\python.exe main.py
+~~~
 
-## Запуск
+Inspect CUDA availability without assuming a GPU is present:
 
-У верхній частині `main.py` зміни `RUN_MODE`:
+~~~powershell
+python -c "import torch; print('CUDA available:', torch.cuda.is_available()); print('Device:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU')"
+~~~
 
-| Режим | Що робить |
-|---|---|
-| `demo` | Показує кубик і задані вручну рухи |
-| `random` | Вимірює випадкового агента |
-| `train_tabular` | Навчає табличний Q-learning |
-| `train_dqn` | Запускає DQN curriculum |
-| `evaluate` | Перевіряє збережений DQN checkpoint |
-| `train_value` | Навчає value network |
-| `solve` | Запускає weighted A* із value network |
+## Configuration and Execution
 
-Після цього одна команда запускає вибраний режим:
+Set `RUN_MODE` in the `SETTINGS` section of `main.py`, then run:
 
-```powershell
+~~~powershell
 python main.py
-```
+~~~
 
-`train_dqn` і `train_value` можуть працювати довго. Спочатку залишай depth 1
-і невеликі training limits.
+| Mode | Description |
+| --- | --- |
+| `demo` | Display the cube and apply a predefined sequence of moves. |
+| `random` | Evaluate random policies at the configured scramble depth. |
+| `train_tabular` | Train and evaluate a tabular Q-learning agent. |
+| `train_dqn` | Train a DQN using the scramble-depth curriculum. |
+| `evaluate` | Evaluate a saved DQN checkpoint without exploration. |
+| `train_value` | Train a value network for heuristic search. |
+| `solve` | Run weighted A* using a saved value-network checkpoint. |
 
-## Тести
+The settings control random seeds, scramble depth, evaluation episodes, training
+budgets, checkpoint paths, heuristic weight, and search limits. Additional
+parameters are defined in `TabularTrainingConfig`, `DQNTrainingConfig`, and
+`ValueTrainingConfig`.
 
-```powershell
+Start with shallow scrambles and small training budgets when checking a new
+configuration. The `evaluate` and `solve` modes require the corresponding
+checkpoints to exist.
+
+## Evaluation and Limitations
+
+Policy evaluation reports solved episodes, success rate, average reward, and
+average episode length. Search additionally reports the solution sequence,
+expanded and generated states, elapsed time, and termination reason.
+
+For comparisons, keep scramble seeds, evaluation depth, episode count, and action
+limits consistent. Training and evaluation routines accept explicit seeds.
+However, the `random` entry-point mode generates policy seeds from an unseeded
+generator; use `RandomAgent` and `evaluate_agent` directly with explicit seeds
+for reproducible baseline comparisons.
+
+A scramble’s length is not necessarily its optimal solution distance. Different
+random seeds do not guarantee disjoint training and evaluation states, especially
+at shallow depths. Success on short scrambles does not establish performance on
+arbitrary cube configurations.
+
+The learned heuristic is not guaranteed to be admissible or consistent, and this
+weighted A* implementation does not guarantee a shortest solution. Search time
+limits are checked between expansions rather than interrupting an inference call.
+Configured training depths are targets, not evidence of achieved performance.
+
+## Tests
+
+~~~powershell
 python -m unittest discover -s tests -v
-```
+~~~
 
-## Основні файли
+The suite covers cube transformations, environment behavior, tabular updates,
+search, neural components, and checkpoint serialization. Small neural training
+tests verify basic operation rather than deep-scramble performance.
 
-```text
-main.py                       # Налаштування та всі режими запуску
-rubiks_rl/cube.py             # Стан кубика і публічні операції
-rubiks_rl/geometry.py         # Фізична 3D-модель поворотів
-rubiks_rl/env.py              # RL-середовище
-rubiks_rl/agents.py           # Random і tabular агенти
-rubiks_rl/dqn.py              # DQN та curriculum training
-rubiks_rl/value_learning.py   # Value network
-rubiks_rl/search.py           # Weighted A*
-tests/                        # Unit та smoke tests
-```
+## Repository Structure
+
+~~~text
+main.py                       Configuration and execution modes
+rubiks_rl/
+    cube.py                   Cube state and move interface
+    geometry.py               Sticker geometry and move permutations
+    env.py                    Reinforcement learning environment
+    agents.py                 Random and tabular Q-learning agents
+    tabular_training.py       Tabular training loop
+    evaluation.py             Shared policy evaluation
+    dqn.py                    DQN and curriculum training
+    value_learning.py         Value estimation and training
+    search.py                 Weighted A* and solver evaluation
+    metrics.py                Metric export and plotting
+tests/                        Unit and smoke tests
+checkpoints/                  Generated model checkpoints
+outputs/                      Generated metrics and plots
+~~~
+
+Output directories are created as needed by the corresponding routines.
